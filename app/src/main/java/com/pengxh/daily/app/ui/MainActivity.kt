@@ -50,6 +50,7 @@ import com.pengxh.daily.app.utils.Constant
 import com.pengxh.daily.app.utils.EmailManager
 import com.pengxh.daily.app.utils.LogFileManager
 import com.pengxh.daily.app.utils.MessageType
+import com.pengxh.daily.app.utils.WorkdayManager
 import com.pengxh.kt.lite.adapter.NormalRecyclerAdapter
 import com.pengxh.kt.lite.base.KotlinBaseActivity
 import com.pengxh.kt.lite.divider.RecyclerViewItemOffsets
@@ -181,8 +182,9 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
             override fun run() {
                 val currentTime = dateFormat.format(Date())
                 val parts = currentTime.split(" ")
+                val dayDesc = WorkdayManager.getTodayDescription()
                 binding.toolbar.apply {
-                    title = parts[2]
+                    title = "${parts[2]} [$dayDesc]"
                     subtitle = "${parts[0]} ${parts[1]}"
                 }
                 mainHandler.postDelayed(this, 1000)
@@ -485,7 +487,18 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
      * 启动任务
      * */
     private fun startExecuteTask() {
-        LogFileManager.writeLog("开始执行每日任务")
+        // 检查今天是否应该执行任务
+        val enableWeekend = SaveKeyValues.getValue(Constant.ENABLE_WEEKEND_KEY, false) as Boolean
+        val enableHoliday = SaveKeyValues.getValue(Constant.ENABLE_HOLIDAY_KEY, false) as Boolean
+        
+        if (!WorkdayManager.shouldExecuteToday(enableWeekend, enableHoliday)) {
+            val dayDesc = WorkdayManager.getTodayDescription()
+            "今天是${dayDesc}，已设置为休息日，任务不会执行".show(this)
+            LogFileManager.writeLog("今天是${dayDesc}，不执行任务")
+            return
+        }
+        
+        LogFileManager.writeLog("开始执行每日任务，今天是：${WorkdayManager.getTodayDescription()}")
         // 启动任务调度
         mainHandler.post(dailyTaskRunnable)
 

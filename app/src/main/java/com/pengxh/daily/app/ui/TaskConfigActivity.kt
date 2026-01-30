@@ -10,6 +10,7 @@ import com.pengxh.daily.app.sqlite.DatabaseWrapper
 import com.pengxh.daily.app.utils.BroadcastManager
 import com.pengxh.daily.app.utils.Constant
 import com.pengxh.daily.app.utils.MessageType
+import com.pengxh.daily.app.utils.WorkdayManager
 import com.pengxh.daily.app.widgets.TaskMessageDialog
 import com.pengxh.kt.lite.base.KotlinBaseActivity
 import com.pengxh.kt.lite.extensions.convertColor
@@ -39,6 +40,13 @@ class TaskConfigActivity : KotlinBaseActivity<ActivityTaskConfigBinding>() {
     }
 
     override fun initOnCreate(savedInstanceState: Bundle?) {
+        // 初始化节假日数据（仅首次运行）
+        val isHolidayInit = SaveKeyValues.getValue(Constant.HOLIDAY_INIT_KEY, false) as Boolean
+        if (!isHolidayInit) {
+            WorkdayManager.init2026Holidays()
+            SaveKeyValues.putValue(Constant.HOLIDAY_INIT_KEY, true)
+        }
+        
         val hour = SaveKeyValues.getValue(
             Constant.RESET_TIME_KEY, Constant.DEFAULT_RESET_HOUR
         ) as Int
@@ -60,6 +68,10 @@ class TaskConfigActivity : KotlinBaseActivity<ActivityTaskConfigBinding>() {
         } else {
             binding.minuteRangeLayout.visibility = View.GONE
         }
+        
+        // 初始化周末和节假日开关
+        binding.weekendSwitch.isChecked = SaveKeyValues.getValue(Constant.ENABLE_WEEKEND_KEY, false) as Boolean
+        binding.holidaySwitch.isChecked = SaveKeyValues.getValue(Constant.ENABLE_HOLIDAY_KEY, false) as Boolean
     }
 
     override fun initEvent() {
@@ -136,6 +148,20 @@ class TaskConfigActivity : KotlinBaseActivity<ActivityTaskConfigBinding>() {
 
                     override fun onCancelClick() {}
                 }).build().show()
+        }
+        
+        // 周末开关监听
+        binding.weekendSwitch.setOnCheckedChangeListener { _, isChecked ->
+            SaveKeyValues.putValue(Constant.ENABLE_WEEKEND_KEY, isChecked)
+            val tip = if (isChecked) "周末将继续执行打卡任务" else "周末将自动暂停打卡任务"
+            tip.show(context)
+        }
+        
+        // 节假日开关监听
+        binding.holidaySwitch.setOnCheckedChangeListener { _, isChecked ->
+            SaveKeyValues.putValue(Constant.ENABLE_HOLIDAY_KEY, isChecked)
+            val tip = if (isChecked) "法定节假日将继续执行打卡任务" else "法定节假日将自动暂停打卡任务"
+            tip.show(context)
         }
 
         binding.outputLayout.setOnClickListener {

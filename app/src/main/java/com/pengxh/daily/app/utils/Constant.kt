@@ -14,6 +14,11 @@ object Constant {
     const val RANDOM_TIME_KEY = "RANDOM_TIME_KEY"
     const val RANDOM_MINUTE_RANGE_KEY = "RANDOM_MINUTE_RANGE_KEY"
     const val TASK_AUTO_START_KEY = "TASK_AUTO_START_KEY"
+    
+    // 新增：周末和节假日配置
+    const val ENABLE_WEEKEND_KEY = "ENABLE_WEEKEND_KEY"
+    const val ENABLE_HOLIDAY_KEY = "ENABLE_HOLIDAY_KEY"
+    const val HOLIDAY_INIT_KEY = "HOLIDAY_INIT_KEY"  // 是否已初始化节假日数据
 
     const val DING_DING = "com.alibaba.android.rimet" // 钉钉
     const val WECHAT = "com.tencent.mm" // 微信
