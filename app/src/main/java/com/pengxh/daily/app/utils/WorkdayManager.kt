@@ -152,17 +152,21 @@ object WorkdayManager {
     }
 
     /**
-     * 初始化2026年法定节假日（示例数据）
+     * 初始化2026年法定节假日（根据国务院办公厅通知）
+     * 数据来源：国务院办公厅关于2026年部分节假日安排的通知
      */
     fun init2026Holidays() {
         val holidays = mutableListOf<HolidayBean>()
         
-        // 元旦：2026年1月1日-3日
+        // 元旦：1月1日（周四）至3日（周六）放假调休，共3天
         holidays.add(createHoliday("2026-01-01", "元旦", 0))
         holidays.add(createHoliday("2026-01-02", "元旦", 0))
         holidays.add(createHoliday("2026-01-03", "元旦", 0))
         
-        // 春节：2026年2月17日-23日（农历正月初一至初七）
+        // 春节：2月15日（农历腊月二十八、周日）至23日（农历正月初七、周一）放假调休，共9天
+        // 2月14日（周六）、2月28日（周六）上班
+        holidays.add(createHoliday("2026-02-15", "春节", 0))
+        holidays.add(createHoliday("2026-02-16", "春节", 0))
         holidays.add(createHoliday("2026-02-17", "春节", 0))
         holidays.add(createHoliday("2026-02-18", "春节", 0))
         holidays.add(createHoliday("2026-02-19", "春节", 0))
@@ -170,34 +174,47 @@ object WorkdayManager {
         holidays.add(createHoliday("2026-02-21", "春节", 0))
         holidays.add(createHoliday("2026-02-22", "春节", 0))
         holidays.add(createHoliday("2026-02-23", "春节", 0))
+        // 调休工作日
+        holidays.add(createHoliday("2026-02-14", "春节调休", 1))
+        holidays.add(createHoliday("2026-02-28", "春节调休", 1))
         
-        // 清明节：2026年4月4日-6日
+        // 清明节：4月4日（周六）至6日（周一）放假，共3天
         holidays.add(createHoliday("2026-04-04", "清明节", 0))
         holidays.add(createHoliday("2026-04-05", "清明节", 0))
         holidays.add(createHoliday("2026-04-06", "清明节", 0))
         
-        // 劳动节：2026年5月1日-5日
+        // 劳动节：5月1日（周五）至5日（周二）放假调休，共5天
+        // 5月9日（周六）上班
         holidays.add(createHoliday("2026-05-01", "劳动节", 0))
         holidays.add(createHoliday("2026-05-02", "劳动节", 0))
         holidays.add(createHoliday("2026-05-03", "劳动节", 0))
         holidays.add(createHoliday("2026-05-04", "劳动节", 0))
         holidays.add(createHoliday("2026-05-05", "劳动节", 0))
+        // 调休工作日
+        holidays.add(createHoliday("2026-05-09", "劳动节调休", 1))
         
-        // 端午节：2026年6月25日-27日
-        holidays.add(createHoliday("2026-06-25", "端午节", 0))
-        holidays.add(createHoliday("2026-06-26", "端午节", 0))
-        holidays.add(createHoliday("2026-06-27", "端午节", 0))
+        // 端午节：6月19日（周五）至21日（周日）放假，共3天
+        holidays.add(createHoliday("2026-06-19", "端午节", 0))
+        holidays.add(createHoliday("2026-06-20", "端午节", 0))
+        holidays.add(createHoliday("2026-06-21", "端午节", 0))
         
-        // 中秋节：2026年10月3日-5日（与国庆连休）
-        // 国庆节：2026年10月1日-8日
+        // 中秋节：9月25日（周五）至27日（周日）放假，共3天
+        holidays.add(createHoliday("2026-09-25", "中秋节", 0))
+        holidays.add(createHoliday("2026-09-26", "中秋节", 0))
+        // 注意：9月27日既是中秋节假期，也被国庆节借用作为调休，这里标记为中秋节
+        holidays.add(createHoliday("2026-09-27", "中秋节", 0))
+        
+        // 国庆节：10月1日（周四）至7日（周三）放假调休，共7天
+        // 10月10日（周六）上班（9月27日已被中秋节占用）
         holidays.add(createHoliday("2026-10-01", "国庆节", 0))
         holidays.add(createHoliday("2026-10-02", "国庆节", 0))
-        holidays.add(createHoliday("2026-10-03", "国庆节/中秋节", 0))
+        holidays.add(createHoliday("2026-10-03", "国庆节", 0))
         holidays.add(createHoliday("2026-10-04", "国庆节", 0))
         holidays.add(createHoliday("2026-10-05", "国庆节", 0))
         holidays.add(createHoliday("2026-10-06", "国庆节", 0))
         holidays.add(createHoliday("2026-10-07", "国庆节", 0))
-        holidays.add(createHoliday("2026-10-08", "国庆节", 0))
+        // 调休工作日
+        holidays.add(createHoliday("2026-10-10", "国庆节调休", 1))
 
         addHolidays(holidays)
     }
