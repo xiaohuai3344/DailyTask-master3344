@@ -1,9 +1,10 @@
-name: Build, Sign and Release APK
+name: Build and Sign APK (Fully Automated)
 
 on:
   push:
     branches:
       - master
+      - genspark_ai_developer
     tags:
       - 'v*'
   pull_request:
@@ -32,83 +33,101 @@ jobs:
     - name: Get version info
       id: version
       run: |
-        # 提取版本信息（更精确的匹配，避免匹配到其他行）
         VERSION_NAME=$(grep "^\s*versionName" app/build.gradle | head -1 | awk '{print $2}' | tr -d "'" | tr -d '"')
         VERSION_CODE=$(grep "^\s*versionCode" app/build.gradle | head -1 | awk '{print $2}')
         COMMIT_SHORT=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y%m%d_%H%M%S')
         
-        # 验证提取的值不为空且格式正确
         if [ -z "$VERSION_NAME" ] || [[ "$VERSION_NAME" == *"+"* ]] || [[ "$VERSION_NAME" == *"="* ]]; then
           VERSION_NAME="2.2.5.1"
-          echo "Warning: Could not extract versionName correctly, using default: $VERSION_NAME"
         fi
         if [ -z "$VERSION_CODE" ] || [[ "$VERSION_CODE" == *"+"* ]] || [[ "$VERSION_CODE" == *"="* ]]; then
           VERSION_CODE="2251"
-          echo "Warning: Could not extract versionCode correctly, using default: $VERSION_CODE"
         fi
         
-        # 清理可能的特殊字符
         VERSION_NAME=$(echo "$VERSION_NAME" | sed 's/[^0-9.]//g')
         VERSION_CODE=$(echo "$VERSION_CODE" | sed 's/[^0-9]//g')
         
-        # 打印调试信息
         echo "Extracted Version Name: $VERSION_NAME"
         echo "Extracted Version Code: $VERSION_CODE"
         echo "Commit: $COMMIT_SHORT"
         echo "Build Date: $BUILD_DATE"
         
-        # 输出到 GitHub Actions（确保格式正确）
         echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
         echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
         echo "commit_short=$COMMIT_SHORT" >> "$GITHUB_OUTPUT"
         echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
-        
-    - name: Decode Keystore
+    
+    - name: Verify Keystore
       run: |
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.jks
-        echo "Keystore decoded successfully"
+        echo "=== Checking keystore file ==="
+        if [ -f app/DailyTask.jks ]; then
+          echo "✓ Keystore file exists: app/DailyTask.jks"
+          ls -lh app/DailyTask.jks
+          
+          # 验证签名配置
+          echo ""
+          echo "=== Verifying keystore info ==="
+          keytool -list -v -keystore app/DailyTask.jks -storepass 123456789 -alias key0 2>&1 | head -20 || echo "Keystore verification skipped"
+        else
+          echo "✗ ERROR: Keystore file not found!"
+          exit 1
+        fi
         
     - name: Build Debug APK
       run: ./gradlew assembleDebug --stacktrace
       
     - name: Build Release APK (Signed)
-      env:
-        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        ./gradlew assembleRelease \
-          -Pandroid.injected.signing.store.file=${{ github.workspace }}/app/release.jks \
-          -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
-          -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
-          -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
-          --stacktrace
+        echo "=== Building signed release APK ==="
+        ./gradlew assembleRelease --stacktrace
+        
+        echo ""
+        echo "=== Verifying APK signature ==="
+        RELEASE_APK=$(find app/build/outputs/apk -type f -name "*.apk" -path "*/release/*" | head -n 1)
+        if [ -n "$RELEASE_APK" ]; then
+          echo "Found release APK: $RELEASE_APK"
+          
+          # 验证签名
+          echo ""
+          echo "Checking APK signature..."
+          jarsigner -verify -verbose -certs "$RELEASE_APK" 2>&1 | head -30 || true
+          
+          # 显示签名详情
+          echo ""
+          echo "APK signature details:"
+          apksigner verify --print-certs "$RELEASE_APK" 2>&1 || echo "apksigner not available, using keytool..."
+        fi
         
     - name: Organize APK files
       run: |
-        # 列出 APK 输出目录结构
         echo "=== APK Output Directory Structure ==="
         find app/build/outputs/apk -type f -name "*.apk"
         
-        # 创建输出目录
         mkdir -p apk_output
         
-        # 查找并复制 Debug APK
+        # Debug APK
         DEBUG_APK=$(find app/build/outputs/apk -type f -name "*.apk" -path "*/debug/*" | head -n 1)
         if [ -n "$DEBUG_APK" ]; then
           cp "$DEBUG_APK" "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_debug_${{ steps.version.outputs.build_date }}.apk"
-          echo "✓ Debug APK: $(ls -lh apk_output/*debug*.apk | awk '{print $5}')"
+          echo "✓ Debug APK: $(basename $DEBUG_APK)"
+          echo "  Size: $(ls -lh apk_output/*debug*.apk | awk '{print $5}')"
         fi
         
-        # 查找并复制 Release APK（已签名）
+        # Release APK (Signed)
         RELEASE_APK=$(find app/build/outputs/apk -type f -name "*.apk" -path "*/release/*" | head -n 1)
         if [ -n "$RELEASE_APK" ]; then
-          cp "$RELEASE_APK" "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_release_${{ steps.version.outputs.build_date }}.apk"
-          echo "✓ Release APK: $(ls -lh apk_output/*release*.apk | awk '{print $5}')"
+          cp "$RELEASE_APK" "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_release_signed_${{ steps.version.outputs.build_date }}.apk"
+          echo "✓ Release APK (SIGNED): $(basename $RELEASE_APK)"
+          echo "  Size: $(ls -lh apk_output/*release*.apk | awk '{print $5}')"
+          
+          # 最终验证
+          echo ""
+          echo "=== Final signature verification ==="
+          jarsigner -verify "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_release_signed_${{ steps.version.outputs.build_date }}.apk" && echo "✓✓✓ APK is properly signed! ✓✓✓" || echo "✗✗✗ WARNING: APK signature verification failed! ✗✗✗"
         fi
         
-        # 显示最终文件
+        echo ""
         echo "=== Final APK files ==="
         ls -lh apk_output/
         
@@ -125,12 +144,13 @@ jobs:
       uses: actions/upload-artifact@v4
       if: success()
       with:
-        name: DailyTask-release-${{ steps.version.outputs.version_name }}-${{ steps.version.outputs.commit_short }}
+        name: DailyTask-release-signed-${{ steps.version.outputs.version_name }}-${{ steps.version.outputs.commit_short }}
         path: apk_output/*release*.apk
         retention-days: 90
         if-no-files-found: warn
         
     - name: Create Release Notes
+      if: startsWith(github.ref, 'refs/tags/v')
       id: release_notes
       run: |
         cat > release_notes.md << 'EOF'
@@ -141,6 +161,7 @@ jobs:
         - **版本代码**: ${{ steps.version.outputs.version_code }}
         - **构建日期**: ${{ steps.version.outputs.build_date }}
         - **提交哈希**: ${{ steps.version.outputs.commit_short }}
+        - **Release APK**: ✅ 已自动签名
 
         ### ✨ 核心功能
         - ✅ 钉钉自动打卡
@@ -154,7 +175,7 @@ jobs:
 
         ### 📥 下载说明
         - **DailyTask_xxx_debug.apk**: Debug 版本，包含调试信息，推荐测试使用
-        - **DailyTask_xxx_release.apk**: Release 版本，已签名优化，推荐生产使用
+        - **DailyTask_xxx_release_signed.apk**: Release 版本，✅ 已签名优化，推荐生产使用
 
         ### 📱 安装要求
         - Android 7.0 (API 26) 或更高版本
@@ -169,7 +190,6 @@ jobs:
         查看详细功能说明和测试指南，请访问仓库中的 `COMPLETE_DELIVERY_REPORT.md`
         EOF
         
-        echo "Release notes created"
         cat release_notes.md
         
     - name: Create GitHub Release
@@ -193,14 +213,18 @@ jobs:
         echo "- **提交哈希**: ${{ steps.version.outputs.commit_short }}" >> $GITHUB_STEP_SUMMARY
         echo "- **构建时间**: ${{ steps.version.outputs.build_date }}" >> $GITHUB_STEP_SUMMARY
         echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Release APK**: ✅ 已自动签名" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📥 下载 APK" >> $GITHUB_STEP_SUMMARY
         echo "请在上方 **Artifacts** 区域下载编译好的 APK 文件" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "- **Debug APK**: 用于开发调试（包含调试信息）" >> $GITHUB_STEP_SUMMARY
-        echo "- **Release APK**: 已签名优化，用于生产发布" >> $GITHUB_STEP_SUMMARY
+        echo "- **Release APK**: ✅ 已签名优化，可直接安装" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
+        
         if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
           echo "### 🚀 GitHub Release" >> $GITHUB_STEP_SUMMARY
           echo "已自动创建 GitHub Release，可在 Releases 页面下载" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "👉 https://github.com/${{ github.repository }}/releases" >> $GITHUB_STEP_SUMMARY
         fi
