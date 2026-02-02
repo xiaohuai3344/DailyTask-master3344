@@ -8,7 +8,7 @@ on:
   pull_request:
     branches:
       - master
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -37,33 +37,37 @@ jobs:
     - name: Get version info
       id: version
       run: |
-        # 提取版本信息（处理单引号和双引号）
-        VERSION_NAME=$(grep "versionName" app/build.gradle | awk '{print $2}' | tr -d "'" | tr -d '"')
-        VERSION_CODE=$(grep "versionCode" app/build.gradle | awk '{print $2}')
+        # 提取版本信息（更精确的匹配，避免匹配到其他行）
+        VERSION_NAME=$(grep "^\s*versionName" app/build.gradle | head -1 | awk '{print $2}' | tr -d "'" | tr -d '"')
+        VERSION_CODE=$(grep "^\s*versionCode" app/build.gradle | head -1 | awk '{print $2}')
         COMMIT_SHORT=$(git rev-parse --short HEAD)
         BUILD_DATE=$(date +'%Y%m%d_%H%M%S')
         
-        # 验证提取的值不为空
-        if [ -z "$VERSION_NAME" ]; then
+        # 验证提取的值不为空且格式正确
+        if [ -z "$VERSION_NAME" ] || [[ "$VERSION_NAME" == *"+"* ]] || [[ "$VERSION_NAME" == *"="* ]]; then
           VERSION_NAME="2.2.5.1"
-          echo "Warning: Could not extract versionName, using default: $VERSION_NAME"
+          echo "Warning: Could not extract versionName correctly, using default: $VERSION_NAME"
         fi
-        if [ -z "$VERSION_CODE" ]; then
+        if [ -z "$VERSION_CODE" ] || [[ "$VERSION_CODE" == *"+"* ]] || [[ "$VERSION_CODE" == *"="* ]]; then
           VERSION_CODE="2251"
-          echo "Warning: Could not extract versionCode, using default: $VERSION_CODE"
+          echo "Warning: Could not extract versionCode correctly, using default: $VERSION_CODE"
         fi
         
-        # 输出到 GitHub Actions
-        echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
-        echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
-        echo "commit_short=$COMMIT_SHORT" >> $GITHUB_OUTPUT
-        echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+        # 清理可能的特殊字符
+        VERSION_NAME=$(echo "$VERSION_NAME" | sed 's/[^0-9.]//g')
+        VERSION_CODE=$(echo "$VERSION_CODE" | sed 's/[^0-9]//g')
         
         # 打印调试信息
-        echo "Version Name: $VERSION_NAME"
-        echo "Version Code: $VERSION_CODE"
+        echo "Extracted Version Name: $VERSION_NAME"
+        echo "Extracted Version Code: $VERSION_CODE"
         echo "Commit: $COMMIT_SHORT"
         echo "Build Date: $BUILD_DATE"
+        
+        # 输出到 GitHub Actions（确保格式正确）
+        echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+        echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+        echo "commit_short=$COMMIT_SHORT" >> "$GITHUB_OUTPUT"
+        echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
         
     - name: Rename APK files
       run: |
