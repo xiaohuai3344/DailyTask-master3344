@@ -85,6 +85,7 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
         listOf(
             MessageType.SHOW_MASK_VIEW.action,
             MessageType.HIDE_MASK_VIEW.action,
+            MessageType.DELAY_SHOW_MASK_VIEW.action,
             MessageType.RESET_DAILY_TASK.action,
             MessageType.UPDATE_RESET_TICK_TIME.action,
             MessageType.START_DAILY_TASK.action,
@@ -106,6 +107,8 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
     private val emailManager by lazy { EmailManager(this) }
     private var timeoutTimer: CountDownTimer? = null
     private val gson by lazy { Gson() }
+    private var delayShowMaskRunnable: Runnable? = null
+    private var shouldDelayShowMask = false
 
     private val broadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -121,6 +124,12 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                         if (binding.maskView.isVisible) {
                             hideMaskView()
                         }
+                    }
+
+                    MessageType.DELAY_SHOW_MASK_VIEW -> {
+                        // 打卡成功后，标记需要延迟显示蒙层
+                        shouldDelayShowMask = true
+                        Log.d(kTag, "onReceive: 收到延迟显示蒙层请求")
                     }
 
                     MessageType.RESET_DAILY_TASK -> {
@@ -780,8 +789,31 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         Log.d(kTag, "onNewIntent: ${packageName}回到前台")
-        if (!binding.maskView.isVisible) {
-            showMaskView()
+        
+        // 如果是打卡完成返回，延迟10-30秒后再显示蒙层
+        if (shouldDelayShowMask) {
+            Log.d(kTag, "onNewIntent: 打卡完成，延迟显示蒙层")
+            shouldDelayShowMask = false
+            
+            // 取消之前的延迟任务
+            delayShowMaskRunnable?.let { mainHandler.removeCallbacks(it) }
+            
+            // 设置延迟时间（随机10-30秒）
+            val delayTime = (10000 + Random().nextInt(21000)).toLong() // 10-30秒
+            Log.d(kTag, "onNewIntent: 将在 ${delayTime / 1000} 秒后恢复暗色")
+            
+            delayShowMaskRunnable = Runnable {
+                if (!binding.maskView.isVisible) {
+                    Log.d(kTag, "延迟时间到，自动恢复暗色")
+                    showMaskView()
+                }
+            }
+            mainHandler.postDelayed(delayShowMaskRunnable!!, delayTime)
+        } else {
+            // 正常情况下立即显示蒙层
+            if (!binding.maskView.isVisible) {
+                showMaskView()
+            }
         }
     }
 
@@ -791,5 +823,8 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
             BroadcastManager.getDefault().unregisterReceiver(this, it)
         }
         EventBus.getDefault().unregister(this)
+        
+        // 清理延迟显示蒙层的任务
+        delayShowMaskRunnable?.let { mainHandler.removeCallbacks(it) }
     }
 }
