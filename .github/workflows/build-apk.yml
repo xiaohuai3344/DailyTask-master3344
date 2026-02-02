@@ -1,0 +1,87 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - master
+      - genspark_ai_developer
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: gradle
+        
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+      
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --stacktrace
+      
+    - name: Build Release APK
+      run: ./gradlew assembleRelease --stacktrace
+      
+    - name: Get version info
+      id: version
+      run: |
+        VERSION_NAME=$(grep "versionName" app/build.gradle | awk '{print $2}' | tr -d '"')
+        VERSION_CODE=$(grep "versionCode" app/build.gradle | awk '{print $2}')
+        COMMIT_SHORT=$(git rev-parse --short HEAD)
+        BUILD_DATE=$(date +%Y%m%d_%H%M%S)
+        echo "version_name=${VERSION_NAME}" >> $GITHUB_OUTPUT
+        echo "version_code=${VERSION_CODE}" >> $GITHUB_OUTPUT
+        echo "commit_short=${COMMIT_SHORT}" >> $GITHUB_OUTPUT
+        echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+        
+    - name: Rename APK files
+      run: |
+        mv app/build/outputs/apk/debug/app-debug.apk \
+           app/build/outputs/apk/debug/DailyTask_${{ steps.version.outputs.version_name }}_debug_${{ steps.version.outputs.build_date }}.apk
+        if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+          mv app/build/outputs/apk/release/app-release-unsigned.apk \
+             app/build/outputs/apk/release/DailyTask_${{ steps.version.outputs.version_name }}_release_unsigned_${{ steps.version.outputs.build_date }}.apk
+        fi
+        
+    - name: Upload Debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: DailyTask-debug-${{ steps.version.outputs.version_name }}-${{ steps.version.outputs.commit_short }}
+        path: app/build/outputs/apk/debug/*.apk
+        retention-days: 30
+        
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: DailyTask-release-${{ steps.version.outputs.version_name }}-${{ steps.version.outputs.commit_short }}
+        path: app/build/outputs/apk/release/*.apk
+        retention-days: 90
+        
+    - name: Build Summary
+      run: |
+        echo "## 🎉 APK 编译成功！" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 构建信息" >> $GITHUB_STEP_SUMMARY
+        echo "- **版本名称**: ${{ steps.version.outputs.version_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **版本代码**: ${{ steps.version.outputs.version_code }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **提交哈希**: ${{ steps.version.outputs.commit_short }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **构建时间**: ${{ steps.version.outputs.build_date }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📥 下载 APK" >> $GITHUB_STEP_SUMMARY
+        echo "请在上方 **Artifacts** 区域下载编译好的 APK 文件" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Debug APK**: 用于开发调试（包含调试信息）" >> $GITHUB_STEP_SUMMARY
+        echo "- **Release APK**: 用于生产发布（未签名，需要手动签名）" >> $GITHUB_STEP_SUMMARY

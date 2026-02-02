@@ -84,6 +84,12 @@ fun Context.openApplication(needCountDown: Boolean) {
 
 fun Context.backToMainActivity() {
     BroadcastManager.getDefault().sendBroadcast(this, MessageType.CANCEL_COUNT_DOWN_TIMER.action)
+    // 通知MainActivity不要立即显示蒙层，需要延迟恢复
+    BroadcastManager.getDefault().sendBroadcast(
+        this,
+        MessageType.DELAY_SHOW_MASK_VIEW.action,
+        mapOf("delay" to true)
+    )
     val backToHome = SaveKeyValues.getValue(Constant.BACK_TO_HOME_KEY, false) as Boolean
     if (backToHome) {
         //模拟点击Home键

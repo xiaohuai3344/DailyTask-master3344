@@ -25,9 +25,11 @@ enum class MessageType(val action: String) {
     /**
      * - 显示蒙版
      * - 隐藏蒙版
+     * - 延迟显示蒙版（打卡成功后延迟恢复暗色）
      * */
     SHOW_MASK_VIEW("com.pengxh.daily.app.BROADCAST_SHOW_MASK_VIEW_ACTION"),
     HIDE_MASK_VIEW("com.pengxh.daily.app.BROADCAST_HIDE_MASK_VIEW_ACTION"),
+    DELAY_SHOW_MASK_VIEW("com.pengxh.daily.app.BROADCAST_DELAY_SHOW_MASK_VIEW_ACTION"),
 
     /**
      * - 通知监听器已连接
