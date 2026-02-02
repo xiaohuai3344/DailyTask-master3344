@@ -71,36 +71,34 @@ jobs:
         
     - name: Rename APK files
       run: |
-        # 列出所有生成的 APK 文件
-        echo "=== Debug APK files ==="
-        ls -lh app/build/outputs/apk/debug/ || echo "Debug directory not found"
-        echo "=== Release APK files ==="
-        ls -lh app/build/outputs/apk/release/ || echo "Release directory not found"
+        # 列出 APK 输出目录结构
+        echo "=== APK Output Directory Structure ==="
+        find app/build/outputs/apk -type f -name "*.apk" || echo "No APK files found"
         
         # 创建输出目录
         mkdir -p apk_output
         
-        # 复制并重命名 Debug APK（支持多种文件名格式）
-        DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" -type f | head -n 1)
+        # 查找并复制 Debug APK（支持所有可能的路径）
+        DEBUG_APK=$(find app/build/outputs/apk -type f -name "*.apk" -path "*/debug/*" | head -n 1)
         if [ -n "$DEBUG_APK" ]; then
           cp "$DEBUG_APK" "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_debug_${{ steps.version.outputs.build_date }}.apk"
-          echo "Debug APK copied: $DEBUG_APK"
+          echo "✓ Debug APK copied: $DEBUG_APK"
         else
-          echo "Warning: Debug APK not found"
+          echo "✗ Warning: Debug APK not found"
         fi
         
-        # 复制并重命名 Release APK（支持多种文件名格式）
-        RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -n 1)
+        # 查找并复制 Release APK（支持所有可能的路径）
+        RELEASE_APK=$(find app/build/outputs/apk -type f -name "*.apk" -path "*/release/*" | head -n 1)
         if [ -n "$RELEASE_APK" ]; then
           cp "$RELEASE_APK" "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_release_unsigned_${{ steps.version.outputs.build_date }}.apk"
-          echo "Release APK copied: $RELEASE_APK"
+          echo "✓ Release APK copied: $RELEASE_APK"
         else
-          echo "Warning: Release APK not found"
+          echo "✗ Warning: Release APK not found"
         fi
         
         # 显示最终输出
         echo "=== Final APK files ==="
-        ls -lh apk_output/
+        ls -lh apk_output/ || echo "No files in apk_output"
         
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
