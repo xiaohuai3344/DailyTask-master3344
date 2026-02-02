@@ -37,37 +37,84 @@ jobs:
     - name: Get version info
       id: version
       run: |
-        VERSION_NAME=$(grep "versionName" app/build.gradle | awk '{print $2}' | tr -d '"')
+        # 提取版本信息（处理单引号和双引号）
+        VERSION_NAME=$(grep "versionName" app/build.gradle | awk '{print $2}' | tr -d "'" | tr -d '"')
         VERSION_CODE=$(grep "versionCode" app/build.gradle | awk '{print $2}')
         COMMIT_SHORT=$(git rev-parse --short HEAD)
-        BUILD_DATE=$(date +%Y%m%d_%H%M%S)
-        echo "version_name=${VERSION_NAME}" >> $GITHUB_OUTPUT
-        echo "version_code=${VERSION_CODE}" >> $GITHUB_OUTPUT
-        echo "commit_short=${COMMIT_SHORT}" >> $GITHUB_OUTPUT
-        echo "build_date=${BUILD_DATE}" >> $GITHUB_OUTPUT
+        BUILD_DATE=$(date +'%Y%m%d_%H%M%S')
+        
+        # 验证提取的值不为空
+        if [ -z "$VERSION_NAME" ]; then
+          VERSION_NAME="2.2.5.1"
+          echo "Warning: Could not extract versionName, using default: $VERSION_NAME"
+        fi
+        if [ -z "$VERSION_CODE" ]; then
+          VERSION_CODE="2251"
+          echo "Warning: Could not extract versionCode, using default: $VERSION_CODE"
+        fi
+        
+        # 输出到 GitHub Actions
+        echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+        echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+        echo "commit_short=$COMMIT_SHORT" >> $GITHUB_OUTPUT
+        echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+        
+        # 打印调试信息
+        echo "Version Name: $VERSION_NAME"
+        echo "Version Code: $VERSION_CODE"
+        echo "Commit: $COMMIT_SHORT"
+        echo "Build Date: $BUILD_DATE"
         
     - name: Rename APK files
       run: |
-        mv app/build/outputs/apk/debug/app-debug.apk \
-           app/build/outputs/apk/debug/DailyTask_${{ steps.version.outputs.version_name }}_debug_${{ steps.version.outputs.build_date }}.apk
-        if [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
-          mv app/build/outputs/apk/release/app-release-unsigned.apk \
-             app/build/outputs/apk/release/DailyTask_${{ steps.version.outputs.version_name }}_release_unsigned_${{ steps.version.outputs.build_date }}.apk
+        # 列出所有生成的 APK 文件
+        echo "=== Debug APK files ==="
+        ls -lh app/build/outputs/apk/debug/ || echo "Debug directory not found"
+        echo "=== Release APK files ==="
+        ls -lh app/build/outputs/apk/release/ || echo "Release directory not found"
+        
+        # 创建输出目录
+        mkdir -p apk_output
+        
+        # 复制并重命名 Debug APK（支持多种文件名格式）
+        DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" -type f | head -n 1)
+        if [ -n "$DEBUG_APK" ]; then
+          cp "$DEBUG_APK" "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_debug_${{ steps.version.outputs.build_date }}.apk"
+          echo "Debug APK copied: $DEBUG_APK"
+        else
+          echo "Warning: Debug APK not found"
         fi
+        
+        # 复制并重命名 Release APK（支持多种文件名格式）
+        RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -n 1)
+        if [ -n "$RELEASE_APK" ]; then
+          cp "$RELEASE_APK" "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_release_unsigned_${{ steps.version.outputs.build_date }}.apk"
+          echo "Release APK copied: $RELEASE_APK"
+        else
+          echo "Warning: Release APK not found"
+        fi
+        
+        # 显示最终输出
+        echo "=== Final APK files ==="
+        ls -lh apk_output/
         
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
+      if: success()
       with:
         name: DailyTask-debug-${{ steps.version.outputs.version_name }}-${{ steps.version.outputs.commit_short }}
-        path: app/build/outputs/apk/debug/*.apk
+        path: apk_output/*debug*.apk
         retention-days: 30
+        if-no-files-found: warn
         
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
+      if: success()
       with:
         name: DailyTask-release-${{ steps.version.outputs.version_name }}-${{ steps.version.outputs.commit_short }}
-        path: app/build/outputs/apk/release/*.apk
+        path: apk_output/*release*.apk
         retention-days: 90
+        if-no-files-found: warn
         
     - name: Build Summary
       run: |
