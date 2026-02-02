@@ -1,10 +1,12 @@
-name: Build Android APK
+name: Build, Sign and Release APK
 
 on:
   push:
     branches:
       - master
       - genspark_ai_developer
+    tags:
+      - 'v*'
   pull_request:
     branches:
       - master
@@ -27,12 +29,6 @@ jobs:
         
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-      
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
-      
-    - name: Build Release APK
-      run: ./gradlew assembleRelease --stacktrace
       
     - name: Get version info
       id: version
@@ -69,36 +65,68 @@ jobs:
         echo "commit_short=$COMMIT_SHORT" >> "$GITHUB_OUTPUT"
         echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
         
-    - name: Rename APK files
+    - name: Decode Keystore
+      if: github.event_name != 'pull_request'
+      run: |
+        if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.jks
+          echo "✓ Keystore decoded successfully"
+        else
+          echo "⚠ Warning: KEYSTORE_BASE64 not configured, will build unsigned release APK"
+        fi
+        
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --stacktrace
+      
+    - name: Build Release APK
+      run: |
+        if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ] && [ -f app/release.jks ]; then
+          echo "Building signed release APK..."
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=${{ github.workspace }}/app/release.jks \
+            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }} \
+            --stacktrace
+        else
+          echo "Building unsigned release APK..."
+          ./gradlew assembleRelease --stacktrace
+        fi
+        
+    - name: Organize APK files
       run: |
         # 列出 APK 输出目录结构
         echo "=== APK Output Directory Structure ==="
-        find app/build/outputs/apk -type f -name "*.apk" || echo "No APK files found"
+        find app/build/outputs/apk -type f -name "*.apk"
         
         # 创建输出目录
         mkdir -p apk_output
         
-        # 查找并复制 Debug APK（支持所有可能的路径）
+        # 查找并复制 Debug APK
         DEBUG_APK=$(find app/build/outputs/apk -type f -name "*.apk" -path "*/debug/*" | head -n 1)
         if [ -n "$DEBUG_APK" ]; then
           cp "$DEBUG_APK" "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_debug_${{ steps.version.outputs.build_date }}.apk"
-          echo "✓ Debug APK copied: $DEBUG_APK"
-        else
-          echo "✗ Warning: Debug APK not found"
+          echo "✓ Debug APK copied: $(basename $DEBUG_APK)"
+          echo "  Size: $(ls -lh apk_output/*debug*.apk | awk '{print $5}')"
         fi
         
-        # 查找并复制 Release APK（支持所有可能的路径）
+        # 查找并复制 Release APK
         RELEASE_APK=$(find app/build/outputs/apk -type f -name "*.apk" -path "*/release/*" | head -n 1)
         if [ -n "$RELEASE_APK" ]; then
-          cp "$RELEASE_APK" "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_release_unsigned_${{ steps.version.outputs.build_date }}.apk"
-          echo "✓ Release APK copied: $RELEASE_APK"
-        else
-          echo "✗ Warning: Release APK not found"
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            cp "$RELEASE_APK" "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_release_signed_${{ steps.version.outputs.build_date }}.apk"
+            echo "✓ Release APK (signed) copied: $(basename $RELEASE_APK)"
+          else
+            cp "$RELEASE_APK" "apk_output/DailyTask_${{ steps.version.outputs.version_name }}_release_unsigned_${{ steps.version.outputs.build_date }}.apk"
+            echo "✓ Release APK (unsigned) copied: $(basename $RELEASE_APK)"
+          fi
+          echo "  Size: $(ls -lh apk_output/*release*.apk | awk '{print $5}')"
         fi
         
-        # 显示最终输出
+        # 显示最终文件
+        echo ""
         echo "=== Final APK files ==="
-        ls -lh apk_output/ || echo "No files in apk_output"
+        ls -lh apk_output/
         
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
@@ -118,8 +146,75 @@ jobs:
         retention-days: 90
         if-no-files-found: warn
         
+    - name: Create Release Notes
+      if: startsWith(github.ref, 'refs/tags/v')
+      id: release_notes
+      run: |
+        SIGNED_STATUS="未签名"
+        if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+          SIGNED_STATUS="已签名"
+        fi
+        
+        cat > release_notes.md << EOF
+        ## 🎉 DailyTask v${{ steps.version.outputs.version_name }} 发布
+
+        ### 📦 构建信息
+        - **版本号**: ${{ steps.version.outputs.version_name }}
+        - **版本代码**: ${{ steps.version.outputs.version_code }}
+        - **构建日期**: ${{ steps.version.outputs.build_date }}
+        - **提交哈希**: ${{ steps.version.outputs.commit_short }}
+        - **Release APK**: ${SIGNED_STATUS}
+
+        ### ✨ 核心功能
+        - ✅ 钉钉自动打卡
+        - ✅ 伪灭屏控制（暗色遮罩）
+        - ✅ 远程指令控制（息屏/亮屏）
+        - ✅ 手动音量键切换
+        - ✅ **周末自动暂停打卡**（新功能）
+        - ✅ **节假日自动暂停打卡**（新功能，内置 2026 年数据）
+        - ✅ **打卡完成自动恢复暗色**（新功能，10-30 秒随机延迟）
+        - ✅ Bugly 异常日志记录
+
+        ### 📥 下载说明
+        - **DailyTask_xxx_debug.apk**: Debug 版本，包含调试信息，推荐测试使用
+        - **DailyTask_xxx_release.apk**: Release 版本，${SIGNED_STATUS}，推荐生产使用
+
+        ### 📱 安装要求
+        - Android 7.0 (API 26) 或更高版本
+        - 需要授予通知权限和悬浮窗权限
+
+        ### 🧪 测试建议
+        1. 测试周末/节假日自动暂停功能
+        2. 测试打卡完成自动恢复暗色功能
+        3. 测试远程指令和手动切换兼容性
+
+        ### 📚 完整文档
+        查看详细功能说明和测试指南，请访问仓库中的 \`COMPLETE_DELIVERY_REPORT.md\`
+        EOF
+        
+        echo "Release notes created"
+        cat release_notes.md
+        
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          apk_output/*.apk
+        body_path: release_notes.md
+        draft: false
+        prerelease: false
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
     - name: Build Summary
       run: |
+        SIGNED_STATUS="未签名"
+        SIGNED_ICON="⚠️"
+        if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+          SIGNED_STATUS="已签名"
+          SIGNED_ICON="✅"
+        fi
+        
         echo "## 🎉 APK 编译成功！" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📦 构建信息" >> $GITHUB_STEP_SUMMARY
@@ -128,9 +223,30 @@ jobs:
         echo "- **提交哈希**: ${{ steps.version.outputs.commit_short }}" >> $GITHUB_STEP_SUMMARY
         echo "- **构建时间**: ${{ steps.version.outputs.build_date }}" >> $GITHUB_STEP_SUMMARY
         echo "- **分支**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Release APK**: ${SIGNED_ICON} ${SIGNED_STATUS}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📥 下载 APK" >> $GITHUB_STEP_SUMMARY
         echo "请在上方 **Artifacts** 区域下载编译好的 APK 文件" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "- **Debug APK**: 用于开发调试（包含调试信息）" >> $GITHUB_STEP_SUMMARY
-        echo "- **Release APK**: 用于生产发布（未签名，需要手动签名）" >> $GITHUB_STEP_SUMMARY
+        echo "- **Release APK**: ${SIGNED_STATUS}，推荐生产使用" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+          echo "### ⚠️ 提示" >> $GITHUB_STEP_SUMMARY
+          echo "Release APK 未签名。如需自动签名，请配置以下 Secrets：" >> $GITHUB_STEP_SUMMARY
+          echo "- \`KEYSTORE_BASE64\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`KEYSTORE_PASSWORD\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`KEY_ALIAS\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`KEY_PASSWORD\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "配置方法请查看仓库中的 \`QUICK_SETUP.md\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          echo "### 🚀 GitHub Release" >> $GITHUB_STEP_SUMMARY
+          echo "已自动创建 GitHub Release，可在 Releases 页面下载" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "👉 https://github.com/${{ github.repository }}/releases" >> $GITHUB_STEP_SUMMARY
+        fi
