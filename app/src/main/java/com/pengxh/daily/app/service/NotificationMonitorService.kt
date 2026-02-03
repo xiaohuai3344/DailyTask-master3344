@@ -71,15 +71,8 @@ class NotificationMonitorService : NotificationListenerService() {
 
         // 目标应用打卡通知
         if (pkg == targetApp && notice.contains("成功")) {
-            // 先发送延迟显示蒙层的广播，确保 MainActivity 收到标志
-            BroadcastManager.getDefault().sendBroadcast(
-                this, MessageType.DELAY_SHOW_MASK_VIEW.action
-            )
-            
-            // 然后返回主界面（会触发 onNewIntent）
+            // backToMainActivity() 内部已经发送了 DELAY_SHOW_MASK_VIEW 广播
             backToMainActivity()
-            
-            // 最后发送邮件通知
             "即将发送通知邮件，请注意查收".show(this)
             emailManager.sendEmail(null, notice, false)
         }
