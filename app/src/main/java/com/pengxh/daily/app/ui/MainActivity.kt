@@ -368,8 +368,9 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                     )
                     
                     // 延迟 2 秒后重新打开钉钉
+                    val mainActivity = this@MainActivity
                     mainHandler.postDelayed({
-                        this@MainActivity.openApplication(true)
+                        mainActivity.openApplication(true)
                     }, 2000)
                     
                     // 重新启动超时定时器

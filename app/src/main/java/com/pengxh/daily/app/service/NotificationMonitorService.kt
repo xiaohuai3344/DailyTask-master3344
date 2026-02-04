@@ -71,11 +71,36 @@ class NotificationMonitorService : NotificationListenerService() {
         }
 
         // 目标应用打卡通知
-        if (pkg == targetApp && notice.contains("成功")) {
-            // backToMainActivity() 内部已经发送了 DELAY_SHOW_MASK_VIEW 广播
-            backToMainActivity()
-            "即将发送通知邮件，请注意查收".show(this)
-            emailManager.sendEmail(null, notice, false)
+        if (pkg == targetApp) {
+            when {
+                notice.contains("成功") -> {
+                    // 打卡成功
+                    LogFileManager.writeLog("收到打卡成功通知: $notice")
+                    // backToMainActivity() 内部已经发送了 DELAY_SHOW_MASK_VIEW 广播
+                    backToMainActivity()
+                    "即将发送通知邮件，请注意查收".show(this)
+                    emailManager.sendEmail("打卡成功通知", notice, false)
+                }
+                notice.contains("失败") || notice.contains("异常") || notice.contains("错误") -> {
+                    // 打卡失败，分析失败原因
+                    val failureReason = analyzeClockInFailure(notice, title)
+                    LogFileManager.writeLog("收到打卡失败通知: $notice, 原因: $failureReason")
+                    
+                    // 发送包含失败原因的邮件通知
+                    emailManager.sendEmail(
+                        "打卡失败通知",
+                        "打卡失败，原因：$failureReason\n\n原始通知：$notice",
+                        false
+                    )
+                    
+                    // 广播打卡失败消息，触发重试机制
+                    BroadcastManager.getDefault().sendBroadcast(
+                        this,
+                        MessageType.CLOCK_IN_FAILED.action,
+                        mapOf("reason" to failureReason, "notification" to notice)
+                    )
+                }
+            }
         }
 
         // 其他消息指令
@@ -169,5 +194,54 @@ class NotificationMonitorService : NotificationListenerService() {
         BroadcastManager.getDefault().sendBroadcast(
             this, MessageType.NOTICE_LISTENER_DISCONNECTED.action
         )
+    }
+
+    /**
+     * 分析打卡失败原因
+     */
+    private fun analyzeClockInFailure(notice: String, title: String): String {
+        return when {
+            // 网络相关
+            notice.contains("网络") || notice.contains("连接失败") || notice.contains("网络异常") -> 
+                "网络连接异常，请检查网络设置"
+            
+            // 时间相关
+            notice.contains("不在打卡时间") || notice.contains("时间不对") || notice.contains("打卡时间") -> 
+                "不在规定的打卡时间范围内"
+            
+            notice.contains("已经打过卡") || notice.contains("重复打卡") -> 
+                "今日已打卡，无需重复打卡"
+            
+            // 定位相关
+            notice.contains("定位") || notice.contains("位置") || notice.contains("范围外") || notice.contains("考勤地点") -> 
+                "定位失败或不在考勤范围内，请检查GPS定位"
+            
+            // 权限相关
+            notice.contains("权限") || notice.contains("无法访问") -> 
+                "应用权限不足，请检查权限设置"
+            
+            // 账号相关
+            notice.contains("登录") || notice.contains("账号") || notice.contains("认证") -> 
+                "账号登录状态异常，请重新登录"
+            
+            // 服务器相关
+            notice.contains("服务器") || notice.contains("系统繁忙") || notice.contains("请稍后") -> 
+                "服务器繁忙或维护中，请稍后重试"
+            
+            // 人脸识别相关
+            notice.contains("人脸") || notice.contains("面部") || notice.contains("识别失败") -> 
+                "人脸识别失败，请确保光线充足且正对摄像头"
+            
+            // Wi-Fi相关
+            notice.contains("WiFi") || notice.contains("无线网络") -> 
+                "需要连接指定Wi-Fi网络"
+            
+            // 其他
+            notice.contains("异常") || notice.contains("错误") -> 
+                "打卡过程出现异常: ${notice.take(50)}"
+            
+            else -> 
+                "未知原因，请查看详细通知: ${notice.take(50)}"
+        }
     }
 }

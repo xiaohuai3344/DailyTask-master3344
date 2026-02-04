@@ -53,7 +53,12 @@ enum class MessageType(val action: String) {
     /**
      * - 更新悬浮窗倒计时
      * */
-    UPDATE_FLOATING_WINDOW_TIME("com.pengxh.daily.app.BROADCAST_UPDATE_FLOATING_WINDOW_TIME_ACTION");
+    UPDATE_FLOATING_WINDOW_TIME("com.pengxh.daily.app.BROADCAST_UPDATE_FLOATING_WINDOW_TIME_ACTION"),
+
+    /**
+     * - 打卡失败通知
+     * */
+    CLOCK_IN_FAILED("com.pengxh.daily.app.BROADCAST_CLOCK_IN_FAILED_ACTION");
 
     companion object {
         fun fromAction(action: String): MessageType? {
