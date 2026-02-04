@@ -44,7 +44,7 @@ class TaskAutoStartService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        emailManager = EmailManager.getInstance(this)
+        emailManager = EmailManager(this)
         LogFileManager.writeLog("TaskAutoStartService: 服务已创建")
     }
 
