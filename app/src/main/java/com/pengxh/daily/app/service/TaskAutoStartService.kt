@@ -30,7 +30,7 @@ class TaskAutoStartService : Service() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    private val emailManager by lazy { EmailManager.getInstance(this) }
+    private lateinit var emailManager: EmailManager
     private var lastCheckDate = ""
     private var hasCheckedToday = false
     private var taskStartedToday = false
@@ -44,6 +44,7 @@ class TaskAutoStartService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        emailManager = EmailManager.getInstance(this)
         LogFileManager.writeLog("TaskAutoStartService: 服务已创建")
     }
 
@@ -96,11 +97,11 @@ class TaskAutoStartService : Service() {
             // 检查是否是工作日
             val enableWeekend = SaveKeyValues.getValue(
                 Constant.ENABLE_WEEKEND_KEY,
-                Constant.DEFAULT_ENABLE_WEEKEND
+                false
             ) as Boolean
             val enableHoliday = SaveKeyValues.getValue(
                 Constant.ENABLE_HOLIDAY_KEY,
-                Constant.DEFAULT_ENABLE_HOLIDAY
+                false
             ) as Boolean
 
             if (!WorkdayManager.shouldExecuteToday(enableWeekend, enableHoliday)) {
@@ -154,7 +155,7 @@ class TaskAutoStartService : Service() {
                     自动操作：已自动启动任务
                     
                     任务列表：
-                    ${allTasks.joinToString("\n") { "  - ${it.taskTime}" }}
+                    ${allTasks.joinToString("\n") { "  - ${it.time}" }}
                     
                     提示：如果不需要自动启动功能，请发送"暂停循环"来关闭。
                 """.trimIndent()
@@ -162,7 +163,7 @@ class TaskAutoStartService : Service() {
                 emailManager.sendEmail(
                     "任务自动启动通知",
                     message,
-                    false
+                    true
                 )
                 
                 LogFileManager.writeLog("TaskAutoStartService: 任务已自动启动，邮件通知已发送")
