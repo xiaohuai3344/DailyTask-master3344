@@ -109,6 +109,8 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
     private val gson by lazy { Gson() }
     private var delayShowMaskRunnable: Runnable? = null
     private var shouldDelayShowMask = false
+    private var retryCount = 0
+    private val maxRetryCount = 3  // 最多重试 3 次
 
     private val broadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -168,6 +170,9 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                     MessageType.CANCEL_COUNT_DOWN_TIMER -> {
                         timeoutTimer?.cancel()
                         timeoutTimer = null
+                        
+                        // ✅ 打卡成功，重置重试计数器
+                        retryCount = 0
 
                         LogFileManager.writeLog("取消超时定时器，执行下一个任务")
                         mainHandler.post(dailyTaskRunnable)
@@ -350,11 +355,37 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
             }
 
             override fun onFinish() {
-                //如果倒计时结束，那么表明没有收到打卡成功的通知
-                backToMainActivity()
-
-                LogFileManager.writeLog("未收到打卡成功通知，发送异常日志邮件")
-                emailManager.sendEmail(null, "", false)
+                // 如果倒计时结束，那么表明没有收到打卡成功的通知
+                if (retryCount < maxRetryCount) {
+                    retryCount++
+                    LogFileManager.writeLog("打卡超时，自动重试第 $retryCount 次")
+                    
+                    // 发送邮件通知
+                    emailManager.sendEmail(
+                        "打卡重试通知",
+                        "第 $retryCount 次重试打卡（共 $maxRetryCount 次机会），请注意查看",
+                        false
+                    )
+                    
+                    // 延迟 2 秒后重新打开钉钉
+                    mainHandler.postDelayed({
+                        openApplication(true)
+                    }, 2000)
+                    
+                    // 重新启动超时定时器
+                    timeoutTimer?.start()
+                } else {
+                    // 超过最大重试次数，放弃并返回
+                    retryCount = 0
+                    backToMainActivity()
+                    
+                    LogFileManager.writeLog("打卡失败，已重试 $maxRetryCount 次，放弃重试")
+                    emailManager.sendEmail(
+                        "打卡失败通知",
+                        "打卡失败，已自动重试 $maxRetryCount 次仍未成功，请手动检查并尝试手动打卡",
+                        false
+                    )
+                }
             }
         }
         timeoutTimer?.start()

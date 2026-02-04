@@ -6,12 +6,16 @@ import android.app.Service
 import android.content.Intent
 import android.os.Binder
 import android.os.CountDownTimer
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.pengxh.daily.app.R
 import com.pengxh.daily.app.extensions.formatTime
 import com.pengxh.daily.app.extensions.openApplication
+import com.pengxh.daily.app.utils.BroadcastManager
 import com.pengxh.daily.app.utils.LogFileManager
+import com.pengxh.daily.app.utils.MessageType
 
 /**
  * APP倒计时服务，解决手机灭屏后倒计时会出现延迟的问题
@@ -71,6 +75,16 @@ class CountDownTimerService : Service() {
         countDownTimer = object : CountDownTimer(seconds * 1000L, 1000L) {
             override fun onTick(millisUntilFinished: Long) {
                 val seconds = (millisUntilFinished / 1000).toInt()
+                
+                // ✅ 倒计时剩余 10 秒时，显示伪灭屏（防止手机真正熄屏）
+                if (seconds == 10) {
+                    LogFileManager.writeLog("倒计时剩余 10 秒，显示伪灭屏防止手机熄屏")
+                    BroadcastManager.getDefault().sendBroadcast(
+                        this@CountDownTimerService,
+                        MessageType.SHOW_MASK_VIEW.action
+                    )
+                }
+                
                 val notification = notificationBuilder.apply {
                     setContentText("${seconds.formatTime()}后执行第${taskIndex}个任务")
                 }.build()
@@ -79,7 +93,18 @@ class CountDownTimerService : Service() {
 
             override fun onFinish() {
                 isTimerRunning = false
-                openApplication(true)
+                
+                // ✅ 打开钉钉前，隐藏伪灭屏（确保钉钉能正常启动）
+                LogFileManager.writeLog("倒计时结束，隐藏伪灭屏，准备打开钉钉")
+                BroadcastManager.getDefault().sendBroadcast(
+                    this@CountDownTimerService,
+                    MessageType.HIDE_MASK_VIEW.action
+                )
+                
+                // ✅ 延迟 500ms 确保伪灭屏完全隐藏后再打开钉钉
+                Handler(Looper.getMainLooper()).postDelayed({
+                    openApplication(true)
+                }, 500)
             }
         }.apply {
             start()

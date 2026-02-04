@@ -139,6 +139,16 @@ class NotificationMonitorService : NotificationListenerService() {
                     emailManager.sendEmail("当天考勤记录通知", record, false)
                 }
 
+                notice.contains("重试打卡") -> {
+                    LogFileManager.writeLog("收到远程重试打卡指令")
+                    openApplication(true)
+                    emailManager.sendEmail(
+                        "重试打卡通知",
+                        "已收到远程指令，正在尝试重新打卡",
+                        false
+                    )
+                }
+
                 else -> {
                     val key = SaveKeyValues.getValue(Constant.TASK_NAME_KEY, "打卡") as String
                     if (notice.contains(key)) {
