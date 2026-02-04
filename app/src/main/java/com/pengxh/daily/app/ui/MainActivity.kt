@@ -40,6 +40,7 @@ import com.pengxh.daily.app.extensions.backToMainActivity
 import com.pengxh.daily.app.extensions.convertToTimeEntity
 import com.pengxh.daily.app.extensions.diffCurrent
 import com.pengxh.daily.app.extensions.getTaskIndex
+import com.pengxh.daily.app.extensions.openApplication
 import com.pengxh.daily.app.service.CountDownTimerService
 import com.pengxh.daily.app.service.FloatingWindowService
 import com.pengxh.daily.app.service.ForegroundRunningService
@@ -368,9 +369,9 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                     )
                     
                     // 延迟 2 秒后重新打开钉钉
-                    val mainActivity = this@MainActivity
+                    val context = this@MainActivity
                     mainHandler.postDelayed({
-                        mainActivity.openApplication(true)
+                        context.openApplication(true)
                     }, 2000)
                     
                     // 重新启动超时定时器
