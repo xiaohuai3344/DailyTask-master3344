@@ -58,6 +58,7 @@
         <service
             android:name=".service.CountDownTimerService"
             android:foregroundServiceType="dataSync" />
+        <service android:name=".service.TaskAutoStartService" />
     </application>
 
     <queries>

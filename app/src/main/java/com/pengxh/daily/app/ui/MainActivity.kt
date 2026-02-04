@@ -259,6 +259,11 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
             startForegroundService(this)
         }
 
+        // 启动任务自动检测服务
+        Intent(this, com.pengxh.daily.app.service.TaskAutoStartService::class.java).apply {
+            startService(this)
+        }
+
         Intent(this, CountDownTimerService::class.java).apply {
             bindService(this, connection, BIND_AUTO_CREATE)
         }
@@ -546,6 +551,8 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
 
         // 更新状态标志
         isTaskStarted = true
+        // 保存任务运行状态，用于自动启动检测
+        SaveKeyValues.putValue("task_is_running", true)
 
         // 更新按钮状态
         binding.executeTaskButton.setIconResource(R.mipmap.ic_stop)
@@ -572,6 +579,9 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
 
                     dailyTaskAdapter.updateCurrentTaskState(-1)
                     countDownTimerService?.updateDailyTaskState()
+                    
+                    // 标记任务已完成，停止运行状态
+                    SaveKeyValues.putValue("task_is_running", false)
 
                     emailManager.sendEmail("任务状态通知", "今日任务已全部执行完毕", false)
                     return
@@ -625,6 +635,8 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
         dailyTaskAdapter.updateCurrentTaskState(-1)
         binding.tipsView.text = ""
         isTaskStarted = false
+        // 保存任务停止状态
+        SaveKeyValues.putValue("task_is_running", false)
 
         // 重置按钮状态
         binding.executeTaskButton.setIconResource(R.mipmap.ic_start)

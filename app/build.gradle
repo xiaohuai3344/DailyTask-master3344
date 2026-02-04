@@ -13,8 +13,8 @@ android {
         applicationId 'com.pengxh.daily.app'
         minSdk 26
         targetSdk 36
-        versionCode 2251
-        versionName '2.2.5.1'
+        versionCode 3000
+        versionName '3.0.0'
     }
 
     flavorDimensions += 'versionCode'
@@ -36,10 +36,11 @@ android {
         }
     }
 
-    GString id = "com.alibaba.android.${createRandomCode()}"
+    // 使用固定的 applicationId 以确保应用可以覆盖安装
     productFlavors {
         daily {
-            applicationId = id
+            // 使用固定的 applicationId，不再随机生成
+            applicationId = "com.pengxh.daily.app"
         }
     }
 
