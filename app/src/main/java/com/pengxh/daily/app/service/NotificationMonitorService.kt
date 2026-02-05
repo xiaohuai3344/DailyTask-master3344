@@ -73,14 +73,7 @@ class NotificationMonitorService : NotificationListenerService() {
         // 目标应用打卡通知
         if (pkg == targetApp) {
             when {
-                notice.contains("成功") -> {
-                    // 打卡成功
-                    LogFileManager.writeLog("收到打卡成功通知: $notice")
-                    // backToMainActivity() 内部已经发送了 DELAY_SHOW_MASK_VIEW 广播
-                    backToMainActivity()
-                    "即将发送通知邮件，请注意查收".show(this)
-                    emailManager.sendEmail("打卡成功通知", notice, false)
-                }
+                // 判断打卡失败（优先判断失败，避免误判）
                 notice.contains("失败") || notice.contains("异常") || notice.contains("错误") -> {
                     // 打卡失败，分析失败原因
                     val failureReason = analyzeClockInFailure(notice, title)
@@ -99,6 +92,22 @@ class NotificationMonitorService : NotificationListenerService() {
                         MessageType.CLOCK_IN_FAILED.action,
                         mapOf("reason" to failureReason, "notification" to notice)
                     )
+                }
+                // 判断打卡成功（扩展关键词，支持多种成功表述）
+                isClockInSuccess(notice) -> {
+                    // 打卡成功
+                    LogFileManager.writeLog("收到打卡成功通知: $notice")
+                    
+                    // 取消超时定时器，停止重试
+                    BroadcastManager.getDefault().sendBroadcast(
+                        this,
+                        MessageType.CANCEL_COUNT_DOWN_TIMER.action
+                    )
+                    
+                    // backToMainActivity() 内部已经发送了 DELAY_SHOW_MASK_VIEW 广播
+                    backToMainActivity()
+                    "即将发送通知邮件，请注意查收".show(this)
+                    emailManager.sendEmail("打卡成功通知", notice, false)
                 }
             }
         }
@@ -196,6 +205,17 @@ class NotificationMonitorService : NotificationListenerService() {
         )
     }
 
+    /**
+     * 判断是否打卡成功
+     */
+    private fun isClockInSuccess(notice: String): Boolean {
+        val successKeywords = arrayOf(
+            "成功", "完成", "签到", "正常", "已打卡", "考勤正常",
+            "打卡成功", "签到成功", "考勤成功", "已签到"
+        )
+        return successKeywords.any { notice.contains(it) }
+    }
+    
     /**
      * 分析打卡失败原因
      */
