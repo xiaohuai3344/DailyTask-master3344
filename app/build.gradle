@@ -26,12 +26,23 @@ android {
             keyAlias 'key0'
             keyPassword '123456789'
         }
+        debug {
+            // Debug 版本也使用相同的签名，确保可以覆盖安装
+            storeFile file('DailyTask.jks')
+            storePassword '123456789'
+            keyAlias 'key0'
+            keyPassword '123456789'
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+        debug {
+            // Debug 版本也使用 release 签名，确保可以覆盖安装
             signingConfig signingConfigs.release
         }
     }
