@@ -112,10 +112,21 @@ class NotificationMonitorService : NotificationListenerService() {
             }
         }
 
-        // 其他消息指令
+        // 其他消息指令 - 来自辅助应用（微信、企业微信、QQ、TIM、支付宝）
         if (pkg in auxiliaryApp) {
-            when {
-                notice.contains("电量") -> {
+            // ✅ 修复：使用严格的指令匹配，避免误触发
+            // 支持两种格式：
+            // 1. 直接发送精确指令：如 "停止"、"启动"
+            // 2. 带前缀的指令：如 "指令:停止"、"#启动"
+            
+            val command = when {
+                notice.startsWith("指令:") -> notice.removePrefix("指令:").trim()
+                notice.startsWith("#") -> notice.removePrefix("#").trim()
+                else -> notice.trim()  // 使用原始内容（需要严格匹配）
+            }
+            
+            when (command) {
+                "电量" -> {
                     val capacity = batteryManager.getIntProperty(
                         BatteryManager.BATTERY_PROPERTY_CAPACITY
                     )
@@ -124,45 +135,57 @@ class NotificationMonitorService : NotificationListenerService() {
                     )
                 }
 
-                notice.contains("启动") -> {
+                "启动", "启动任务", "开始打卡" -> {
+                    LogFileManager.writeLog("收到启动任务指令: $notice")
                     BroadcastManager.getDefault().sendBroadcast(
                         this, MessageType.START_DAILY_TASK.action
                     )
-                }
-
-                notice.contains("停止") -> {
-                    BroadcastManager.getDefault().sendBroadcast(
-                        this, MessageType.STOP_DAILY_TASK.action
+                    emailManager.sendEmail(
+                        "任务启动确认",
+                        "收到启动指令，任务已启动。来源: $pkg",
+                        false
                     )
                 }
 
-                notice.contains("开始循环") -> {
+                "停止", "停止任务", "停止打卡" -> {
+                    LogFileManager.writeLog("收到停止任务指令: $notice")
+                    BroadcastManager.getDefault().sendBroadcast(
+                        this, MessageType.STOP_DAILY_TASK.action
+                    )
+                    emailManager.sendEmail(
+                        "任务停止确认",
+                        "收到停止指令，任务已停止。来源: $pkg",
+                        false
+                    )
+                }
+
+                "开始循环" -> {
                     SaveKeyValues.putValue(Constant.TASK_AUTO_START_KEY, true)
                     emailManager.sendEmail(
                         "循环任务状态通知", "循环任务状态已更新为：开启", false
                     )
                 }
 
-                notice.contains("暂停循环") -> {
+                "暂停循环" -> {
                     SaveKeyValues.putValue(Constant.TASK_AUTO_START_KEY, false)
                     emailManager.sendEmail(
                         "循环任务状态通知", "循环任务状态已更新为：暂停", false
                     )
                 }
 
-                notice.contains("息屏") -> {
+                "息屏" -> {
                     BroadcastManager.getDefault().sendBroadcast(
                         this, MessageType.SHOW_MASK_VIEW.action
                     )
                 }
 
-                notice.contains("亮屏") -> {
+                "亮屏" -> {
                     BroadcastManager.getDefault().sendBroadcast(
                         this, MessageType.HIDE_MASK_VIEW.action
                     )
                 }
 
-                notice.contains("考勤记录") -> {
+                "考勤记录" -> {
                     var record = ""
                     var index = 1
                     DatabaseWrapper.loadCurrentDayNotice().forEach {
@@ -174,7 +197,7 @@ class NotificationMonitorService : NotificationListenerService() {
                     emailManager.sendEmail("当天考勤记录通知", record, false)
                 }
 
-                notice.contains("重试打卡") -> {
+                "重试打卡" -> {
                     LogFileManager.writeLog("收到远程重试打卡指令")
                     openApplication(true)
                     emailManager.sendEmail(
@@ -185,10 +208,12 @@ class NotificationMonitorService : NotificationListenerService() {
                 }
 
                 else -> {
+                    // ✅ 不是有效指令，检查是否是任务名称
                     val key = SaveKeyValues.getValue(Constant.TASK_NAME_KEY, "打卡") as String
-                    if (notice.contains(key)) {
+                    if (command == key) {
                         openApplication(true)
                     }
+                    // 其他消息一律忽略，不做任何处理
                 }
             }
         }
