@@ -94,4 +94,44 @@ object LogFileManager {
             throw IllegalStateException("Log file not initialized. Call initLogFile first.")
         }
     }
+
+    /**
+     * 读取最后N行日志
+     * @param lines 要读取的行数，默认10行
+     * @return 日志内容字符串
+     */
+    @Synchronized
+    fun readLastLogs(lines: Int = 10): String {
+        if (!::currentLogFile.isInitialized) {
+            return "日志文件未初始化"
+        }
+
+        fileLock.lock()
+        try {
+            if (!Files.exists(currentLogFile)) {
+                return "日志文件不存在"
+            }
+
+            // 读取所有行
+            val allLines = Files.readAllLines(currentLogFile)
+            
+            if (allLines.isEmpty()) {
+                return "暂无日志记录"
+            }
+
+            // 取最后N行
+            val lastLines = if (allLines.size <= lines) {
+                allLines
+            } else {
+                allLines.takeLast(lines)
+            }
+
+            return lastLines.joinToString("\n")
+        } catch (e: IOException) {
+            e.printStackTrace()
+            return "读取日志失败: ${e.message}"
+        } finally {
+            fileLock.unlock()
+        }
+    }
 }
