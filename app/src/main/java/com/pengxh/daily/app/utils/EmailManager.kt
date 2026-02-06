@@ -26,7 +26,7 @@ class EmailManager(private val context: Context) {
     // 邮件发送频率限制
     private val emailHistory = mutableMapOf<String, Long>()
     private val MIN_EMAIL_INTERVAL = 60 * 1000L // 60秒内同类型邮件只发送一次
-    private val MAX_RETRY_EMAIL_COUNT = 3 // 最多连续发送重试邮件次数
+    // ✅ 移除重试邮件限制（已移除重试功能）
 
     private fun createSmtpProperties(): Properties {
         val props = Properties().apply {
@@ -67,15 +67,7 @@ class EmailManager(private val context: Context) {
             val lastSendTime = emailHistory[emailKey] ?: 0
             val currentTime = System.currentTimeMillis()
             
-            // 如果是重试邮件，检查是否超过最大重试次数
-            if (emailKey.contains("重试")) {
-                val retryCount = emailHistory.count { it.key.contains("重试") && it.value > currentTime - 5 * 60 * 1000 }
-                if (retryCount >= MAX_RETRY_EMAIL_COUNT) {
-                    Log.w(kTag, "重试邮件发送过于频繁，已达到最大限制: $retryCount")
-                    onFailure?.invoke("重试邮件发送过于频繁")
-                    return
-                }
-            }
+            // ✅ 移除重试邮件特殊检查（已移除重试功能）
             
             // 检查发送间隔
             if (currentTime - lastSendTime < MIN_EMAIL_INTERVAL) {

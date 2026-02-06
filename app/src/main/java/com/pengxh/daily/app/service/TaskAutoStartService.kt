@@ -163,7 +163,7 @@ class TaskAutoStartService : Service() {
                 emailManager.sendEmail(
                     "任务自动启动通知",
                     message,
-                    true
+                    false  // ✅ 修复：改为 false，启用频率限制
                 )
                 
                 LogFileManager.writeLog("TaskAutoStartService: 任务已自动启动，邮件通知已发送")

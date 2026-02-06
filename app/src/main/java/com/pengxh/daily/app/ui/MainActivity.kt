@@ -110,8 +110,7 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
     private val gson by lazy { Gson() }
     private var delayShowMaskRunnable: Runnable? = null
     private var shouldDelayShowMask = false
-    private var retryCount = 0
-    private val maxRetryCount = 3  // 最多重试 3 次
+    // ❌ 移除重试功能：删除 retryCount 和 maxRetryCount
 
     private val broadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -171,9 +170,7 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
                     MessageType.CANCEL_COUNT_DOWN_TIMER -> {
                         timeoutTimer?.cancel()
                         timeoutTimer = null
-                        
-                        // ✅ 打卡成功，重置重试计数器
-                        retryCount = 0
+                        // ❌ 移除重试功能：删除重试计数器重置
 
                         LogFileManager.writeLog("取消超时定时器，执行下一个任务")
                         mainHandler.post(dailyTaskRunnable)
@@ -361,38 +358,15 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
             }
 
             override fun onFinish() {
-                // 如果倒计时结束，那么表明没有收到打卡成功的通知
-                if (retryCount < maxRetryCount) {
-                    retryCount++
-                    LogFileManager.writeLog("打卡超时，自动重试第 $retryCount 次")
-                    
-                    // 发送邮件通知
-                    emailManager.sendEmail(
-                        "打卡重试通知",
-                        "第 $retryCount 次重试打卡（共 $maxRetryCount 次机会），请注意查看",
-                        false
-                    )
-                    
-                    // 延迟 2 秒后重新打开钉钉
-                    val context = this@MainActivity
-                    mainHandler.postDelayed({
-                        context.openApplication(true)
-                    }, 2000)
-                    
-                    // 重新启动超时定时器
-                    timeoutTimer?.start()
-                } else {
-                    // 超过最大重试次数，放弃并返回
-                    retryCount = 0
-                    backToMainActivity()
-                    
-                    LogFileManager.writeLog("打卡失败，已重试 $maxRetryCount 次，放弃重试")
-                    emailManager.sendEmail(
-                        "打卡失败通知",
-                        "打卡失败，已自动重试 $maxRetryCount 次仍未成功，请手动检查并尝试手动打卡",
-                        false
-                    )
-                }
+                // ❌ 移除重试功能：超时后直接返回主界面，不再重试
+                backToMainActivity()
+                
+                LogFileManager.writeLog("打卡超时，返回主界面")
+                emailManager.sendEmail(
+                    "打卡超时通知",
+                    "打卡超时，未收到打卡成功通知，请手动检查打卡状态",
+                    false
+                )
             }
         }
         timeoutTimer?.start()
@@ -847,13 +821,16 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
             val delayTime = (10000 + Random().nextInt(21000)).toLong() // 10-30秒
             Log.d(kTag, "onNewIntent: 将在 ${delayTime / 1000} 秒后恢复暗色")
             
+            // ✅ 修复：使用安全的方式，避免非空断言
             delayShowMaskRunnable = Runnable {
                 if (!binding.maskView.isVisible) {
                     Log.d(kTag, "延迟时间到，自动恢复暗色")
                     showMaskView()
                 }
             }
-            mainHandler.postDelayed(delayShowMaskRunnable!!, delayTime)
+            delayShowMaskRunnable?.let {
+                mainHandler.postDelayed(it, delayTime)
+            }
         } else {
             // 正常情况下立即显示蒙层
             if (!binding.maskView.isVisible) {
@@ -869,7 +846,10 @@ class MainActivity : KotlinBaseActivity<ActivityMainBinding>() {
         }
         EventBus.getDefault().unregister(this)
         
-        // 清理延迟显示蒙层的任务
-        delayShowMaskRunnable?.let { mainHandler.removeCallbacks(it) }
+        // ✅ 修复：清理所有 Handler 回调和定时器，防止内存泄漏
+        mainHandler.removeCallbacksAndMessages(null)
+        timeoutTimer?.cancel()
+        timeoutTimer = null
+        delayShowMaskRunnable = null
     }
 }
